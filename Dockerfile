@@ -1,3 +1,21 @@
+# Build stage
+FROM gradle:8.7-jdk21-alpine AS build
+
+WORKDIR /app
+
+# Copy gradle files first for better layer caching
+COPY build.gradle settings.gradle ./
+COPY gradle gradle/
+
+# Download dependencies
+RUN gradle dependencies --no-daemon
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN gradle clean build -x test --no-daemon
+
 # Main stage
 FROM alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
 
@@ -6,19 +24,21 @@ COPY scripts /scripts
 COPY pipeline /pipeline
 COPY src/main/resources/static/fonts/*.ttf /usr/share/fonts/opentype/noto/
 #COPY src/main/resources/static/fonts/*.otf /usr/share/fonts/opentype/noto/
-COPY build/libs/*.jar app.jar
+
+# Copy the built JAR from build stage
+COPY --from=build /app/build/libs/*.jar app.jar
 
 ARG VERSION_TAG
 
 LABEL org.opencontainers.image.title="Stirling-PDF"
 LABEL org.opencontainers.image.description="A powerful locally hosted web-based PDF manipulation tool supporting 50+ operations including merging, splitting, conversion, OCR, watermarking, and more."
-LABEL org.opencontainers.image.source="https://github.com/Stirling-Tools/Stirling-PDF"
+LABEL org.opencontainers.image.source="https://github.com/bog-us/Stirling-PDF"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.vendor="Stirling-Tools"
-LABEL org.opencontainers.image.url="https://www.stirlingpdf.com"
+LABEL org.opencontainers.image.vendor="bog-us"
+LABEL org.opencontainers.image.url="https://github.com/bog-us/Stirling-PDF"
 LABEL org.opencontainers.image.documentation="https://docs.stirlingpdf.com"
-LABEL maintainer="Stirling-Tools"
-LABEL org.opencontainers.image.authors="Stirling-Tools"
+LABEL maintainer="bog-us"
+LABEL org.opencontainers.image.authors="bog-us"
 LABEL org.opencontainers.image.version="${VERSION_TAG}"
 LABEL org.opencontainers.image.keywords="PDF, manipulation, merge, split, convert, OCR, watermark"
 
@@ -35,7 +55,6 @@ ENV DOCKER_ENABLE_SECURITY=false \
     UNO_PATH=/usr/lib/libreoffice/program \
     URE_BOOTSTRAP=file:///usr/lib/libreoffice/program/fundamentalrc \
     PATH=$PATH:/opt/venv/bin
-
 
 # JDK for app
 RUN echo "@main https://dl-cdn.alpinelinux.org/alpine/edge/main" | tee -a /etc/apk/repositories && \
